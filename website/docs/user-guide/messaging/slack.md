@@ -157,6 +157,7 @@ SLACK_ALLOWED_USERS=U01ABC2DEF3              # Comma-separated Member IDs
 # Optional
 SLACK_HOME_CHANNEL=C01234567890              # Default channel for cron/scheduled messages
 SLACK_HOME_CHANNEL_NAME=general              # Human-readable name for the home channel (optional)
+SLACK_ENABLE_REACTIONS=true                  # Enable 👀→✅ reaction feedback (true/false, default: true)
 ```
 
 Or run the interactive setup:
@@ -228,6 +229,34 @@ Hermes supports voice on Slack:
 
 - **Incoming:** Voice/audio messages are automatically transcribed using the configured STT provider: local `faster-whisper`, Groq Whisper (`GROQ_API_KEY`), or OpenAI Whisper (`VOICE_TOOLS_OPENAI_KEY`)
 - **Outgoing:** TTS responses are sent as audio file attachments
+
+---
+
+## Reaction Feedback
+
+Hermes can add visual feedback reactions to your Slack messages to indicate when your message was received and when a response is complete:
+
+- **👀 reaction** — Added when Hermes receives your message and starts processing
+- **✅ reaction** — Added when Hermes completes its response
+
+This helps you understand when the bot is working, especially for longer tasks.
+
+### Disabling Reaction Feedback
+
+To disable reaction feedback, add the following to your `config.yaml`:
+
+```yaml
+platforms:
+  slack:
+    extra:
+      enable_reactions: false
+```
+
+Or via environment variable:
+
+```bash
+SLACK_ENABLE_REACTIONS=false
+```
 
 ---
 
