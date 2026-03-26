@@ -232,6 +232,26 @@ Hermes supports voice on Slack:
 
 ---
 
+## Reaction Feedback
+
+The bot provides visual feedback by adding emoji reactions to messages:
+
+- **👀 (eyes)** — added immediately when your message is received
+- **✅ (white_check_mark)** — added when the response is complete
+
+This helps you confirm that your message was received and that the bot is still working on longer responses.
+
+To disable this feature, add the following to your `config.yaml` under the platform config:
+
+```yaml
+platforms:
+  slack:
+    extra:
+      enable_reactions: false
+```
+
+---
+
 ## Troubleshooting
 
 | Problem | Solution |
