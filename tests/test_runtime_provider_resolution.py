@@ -657,3 +657,128 @@ def test_openrouter_provider_not_affected_by_custom_fix(monkeypatch):
 
     resolved = rp.resolve_runtime_provider(requested="openrouter")
     assert resolved["provider"] == "openrouter"
+
+
+# ------------------------------------------------------------------
+# extra_headers support for named custom providers
+# ------------------------------------------------------------------
+
+
+def test_named_custom_provider_with_extra_headers(monkeypatch):
+    """Custom providers with extra_headers should have them resolved."""
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.setattr(
+        rp,
+        "load_config",
+        lambda: {
+            "custom_providers": [
+                {
+                    "name": "CustomHost",
+                    "base_url": "https://custom.host.ai/v1",
+                    "api_key": "custom-host-key",
+                    "extra_headers": {
+                        "x-host-head": "test-host-value",
+                        "x-custom-auth": "auth-123",
+                    },
+                }
+            ]
+        },
+    )
+
+    resolved = rp.resolve_runtime_provider(requested="customhost")
+
+    assert resolved["provider"] == "custom"
+    assert resolved["extra_headers"] == {
+        "x-host-head": "test-host-value",
+        "x-custom-auth": "auth-123",
+    }
+    assert resolved["base_url"] == "https://custom.host.ai/v1"
+    assert resolved["api_key"] == "custom-host-key"
+
+
+def test_named_custom_provider_extra_headers_empty_dict_ignored(monkeypatch):
+    """Custom providers with empty extra_headers dict should not include the key."""
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.setattr(
+        rp,
+        "load_config",
+        lambda: {
+            "custom_providers": [
+                {
+                    "name": "EmptyHeaders",
+                    "base_url": "https://empty.host/v1",
+                    "api_key": "key",
+                    "extra_headers": {},
+                }
+            ]
+        },
+    )
+
+    resolved = rp.resolve_runtime_provider(requested="emptyheaders")
+
+    # empty dict should not be included
+    assert "extra_headers" not in resolved
+
+
+def test_named_custom_provider_extra_headers_non_dict_ignored(monkeypatch):
+    """Custom providers with non-dict extra_headers should not include the key."""
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.setattr(
+        rp,
+        "load_config",
+        lambda: {
+            "custom_providers": [
+                {
+                    "name": "BadHeaders",
+                    "base_url": "https://bad.host/v1",
+                    "api_key": "key",
+                    "extra_headers": "not-a-dict",
+                }
+            ]
+        },
+    )
+
+    resolved = rp.resolve_runtime_provider(requested="badheaders")
+
+    assert "extra_headers" not in resolved
+
+
+def test_resolve_named_custom_runtime_includes_extra_headers(monkeypatch):
+    """_resolve_named_custom_runtime should include extra_headers from the provider config."""
+    monkeypatch.setattr(
+        rp,
+        "_get_named_custom_provider",
+        lambda p: {
+            "name": "MyHost",
+            "base_url": "https://myhost.example/v1",
+            "api_key": "host-key",
+            "extra_headers": {"x-host-head": "myhost-123"},
+        },
+    )
+
+    resolved = rp._resolve_named_custom_runtime(requested_provider="myhost")
+
+    assert resolved is not None
+    assert resolved["extra_headers"] == {"x-host-head": "myhost-123"}
+    assert resolved["provider"] == "custom"
+
+
+def test_resolve_named_custom_runtime_without_extra_headers(monkeypatch):
+    """_resolve_named_custom_runtime should not have extra_headers key when not configured."""
+    monkeypatch.setattr(
+        rp,
+        "_get_named_custom_provider",
+        lambda p: {
+            "name": "PlainHost",
+            "base_url": "https://plain.host/v1",
+            "api_key": "plain-key",
+        },
+    )
+
+    resolved = rp._resolve_named_custom_runtime(requested_provider="plainhost")
+
+    assert resolved is not None
+    assert "extra_headers" not in resolved
