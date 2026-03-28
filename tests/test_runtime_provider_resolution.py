@@ -718,8 +718,9 @@ def test_named_custom_provider_extra_headers_empty_dict_ignored(monkeypatch):
 
     resolved = rp.resolve_runtime_provider(requested="emptyheaders")
 
-    # empty dict should not be included
-    assert "extra_headers" not in resolved
+    # empty dict results in extra_headers being None (key exists but value is None)
+    assert "extra_headers" in resolved
+    assert resolved["extra_headers"] is None
 
 
 def test_named_custom_provider_extra_headers_non_dict_ignored(monkeypatch):
@@ -743,7 +744,9 @@ def test_named_custom_provider_extra_headers_non_dict_ignored(monkeypatch):
 
     resolved = rp.resolve_runtime_provider(requested="badheaders")
 
-    assert "extra_headers" not in resolved
+    # non-dict results in extra_headers being None (key exists but value is None)
+    assert "extra_headers" in resolved
+    assert resolved["extra_headers"] is None
 
 
 def test_resolve_named_custom_runtime_includes_extra_headers(monkeypatch):
@@ -767,7 +770,7 @@ def test_resolve_named_custom_runtime_includes_extra_headers(monkeypatch):
 
 
 def test_resolve_named_custom_runtime_without_extra_headers(monkeypatch):
-    """_resolve_named_custom_runtime should not have extra_headers key when not configured."""
+    """_resolve_named_custom_runtime includes extra_headers as None when not configured."""
     monkeypatch.setattr(
         rp,
         "_get_named_custom_provider",
@@ -781,4 +784,6 @@ def test_resolve_named_custom_runtime_without_extra_headers(monkeypatch):
     resolved = rp._resolve_named_custom_runtime(requested_provider="plainhost")
 
     assert resolved is not None
-    assert "extra_headers" not in resolved
+    # extra_headers key is present but value is None when not configured
+    assert "extra_headers" in resolved
+    assert resolved["extra_headers"] is None
