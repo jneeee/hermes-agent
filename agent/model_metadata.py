@@ -906,6 +906,40 @@ def estimate_messages_tokens_rough(messages: List[Dict[str, Any]]) -> int:
     return total_chars // 4
 
 
+def get_custom_provider_context_length(
+    model: str,
+    base_url: str,
+    custom_providers: list | None,
+) -> int | None:
+    """Look up context_length for a model from custom_providers config.
+
+    Matches on base_url. Returns None if no match found.
+    """
+    if not custom_providers or not base_url:
+        return None
+
+    base_url_normalized = base_url.rstrip("/")
+
+    for entry in custom_providers:
+        if not isinstance(entry, dict):
+            continue
+        entry_url = (entry.get("base_url") or "").rstrip("/")
+        if entry_url and entry_url == base_url_normalized:
+            models = entry.get("models", {})
+            if isinstance(models, dict):
+                model_cfg = models.get(model, {})
+                if isinstance(model_cfg, dict):
+                    ctx = model_cfg.get("context_length")
+                    if ctx is not None:
+                        try:
+                            return int(ctx)
+                        except (TypeError, ValueError):
+                            pass
+            break
+
+    return None
+
+
 def estimate_request_tokens_rough(
     messages: List[Dict[str, Any]],
     *,

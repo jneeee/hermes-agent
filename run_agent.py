@@ -85,6 +85,7 @@ from agent.model_metadata import (
     estimate_tokens_rough, estimate_messages_tokens_rough, estimate_request_tokens_rough,
     get_next_probe_tier, parse_context_limit_from_error,
     save_context_length,
+    get_custom_provider_context_length,
 )
 from agent.context_compressor import ContextCompressor
 from agent.prompt_caching import apply_anthropic_cache_control
@@ -1155,24 +1156,11 @@ class AIAgent:
 
         # Check custom_providers per-model context_length
         if _config_context_length is None:
-            _custom_providers = _agent_cfg.get("custom_providers")
-            if isinstance(_custom_providers, list):
-                for _cp_entry in _custom_providers:
-                    if not isinstance(_cp_entry, dict):
-                        continue
-                    _cp_url = (_cp_entry.get("base_url") or "").rstrip("/")
-                    if _cp_url and _cp_url == self.base_url.rstrip("/"):
-                        _cp_models = _cp_entry.get("models", {})
-                        if isinstance(_cp_models, dict):
-                            _cp_model_cfg = _cp_models.get(self.model, {})
-                            if isinstance(_cp_model_cfg, dict):
-                                _cp_ctx = _cp_model_cfg.get("context_length")
-                                if _cp_ctx is not None:
-                                    try:
-                                        _config_context_length = int(_cp_ctx)
-                                    except (TypeError, ValueError):
-                                        pass
-                        break
+            _config_context_length = get_custom_provider_context_length(
+                self.model,
+                self.base_url,
+                _agent_cfg.get("custom_providers"),
+            )
         
         self.context_compressor = ContextCompressor(
             model=self.model,

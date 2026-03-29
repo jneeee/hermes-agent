@@ -2064,6 +2064,7 @@ class GatewayRunner:
             from agent.model_metadata import (
                 estimate_messages_tokens_rough,
                 get_model_context_length,
+                get_custom_provider_context_length,
             )
 
             # Read model + compression config from config.yaml.
@@ -2102,9 +2103,18 @@ class GatewayRunner:
                                 _hyg_config_context_length = int(_raw_ctx)
                             except (TypeError, ValueError):
                                 pass
-                        # Read provider for accurate context detection
+
+                        # Read provider for accurate context detection (needed for custom_providers match)
                         _hyg_provider = _model_cfg.get("provider") or None
                         _hyg_base_url = _model_cfg.get("base_url") or None
+
+                        # Check custom_providers per-model context_length
+                        if _hyg_config_context_length is None:
+                            _hyg_config_context_length = get_custom_provider_context_length(
+                                _hyg_model,
+                                _hyg_base_url or "",
+                                _hyg_data.get("custom_providers"),
+                            )
 
                     # Read compression settings — only use enabled flag.
                     # The threshold is intentionally separate from the agent's
@@ -2783,7 +2793,9 @@ class GatewayRunner:
         users can immediately see if context detection went wrong (e.g.
         local models falling to the 128K default).
         """
-        from agent.model_metadata import get_model_context_length, DEFAULT_FALLBACK_CONTEXT
+        from agent.model_metadata import (
+            get_model_context_length, DEFAULT_FALLBACK_CONTEXT, get_custom_provider_context_length,
+        )
 
         model = _resolve_gateway_model()
         config_context_length = None
@@ -2805,6 +2817,22 @@ class GatewayRunner:
                             config_context_length = int(raw_ctx)
                         except (TypeError, ValueError):
                             pass
+
+                    _info_base_url = model_cfg.get("base_url") or ""
+                    # Fallback to runtime base_url if not in model config (needed for custom_providers match)
+                    if not _info_base_url:
+                        try:
+                            _info_runtime = _resolve_runtime_agent_kwargs()
+                            _info_base_url = _info_runtime.get("base_url") or ""
+                        except Exception:
+                            pass
+                    if config_context_length is None:
+                        config_context_length = get_custom_provider_context_length(
+                            model,
+                            _info_base_url,
+                            data.get("custom_providers"),
+                        )
+
                     provider = model_cfg.get("provider") or None
                     base_url = model_cfg.get("base_url") or None
         except Exception:
