@@ -169,6 +169,7 @@ def test_cli_turn_routing_uses_primary_when_disabled(monkeypatch):
     shell.api_mode = "chat_completions"
     shell.base_url = "https://openrouter.ai/api/v1"
     shell.api_key = "sk-primary"
+    shell.extra_headers = None
     shell._smart_model_routing = {"enabled": False}
 
     result = shell._resolve_turn_agent_config("what time is it in tokyo?")
@@ -198,6 +199,7 @@ def test_cli_turn_routing_uses_cheap_model_when_simple(monkeypatch):
     shell.api_mode = "chat_completions"
     shell.base_url = "https://openrouter.ai/api/v1"
     shell.api_key = "primary-key"
+    shell.extra_headers = None
     shell._smart_model_routing = {
         "enabled": True,
         "cheap_model": {"provider": "zai", "model": "glm-5-air"},
