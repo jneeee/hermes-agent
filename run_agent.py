@@ -831,7 +831,8 @@ class AIAgent:
                     }
                 # Apply custom headers for named custom providers (from config.yaml)
                 if self.provider == "custom" and self.extra_headers:
-                    client_kwargs["default_headers"] = self.extra_headers
+                    existing = client_kwargs.get("default_headers", {})
+                    client_kwargs["default_headers"] = {**existing, **self.extra_headers}
             else:
                 # No explicit creds — use the centralized provider router
                 from agent.auxiliary_client import resolve_provider_client

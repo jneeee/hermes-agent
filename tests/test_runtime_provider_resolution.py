@@ -787,3 +787,71 @@ def test_resolve_named_custom_runtime_without_extra_headers(monkeypatch):
     # extra_headers key is present but value is None when not configured
     assert "extra_headers" in resolved
     assert resolved["extra_headers"] is None
+
+
+def test_get_named_custom_provider_extra_headers_type_validated(monkeypatch):
+    """_get_named_custom_provider should only accept dict-type extra_headers."""
+    monkeypatch.setattr(
+        rp,
+        "load_config",
+        lambda: {
+            "custom_providers": [
+                {
+                    "name": "ListHeaders",
+                    "base_url": "https://list.host/v1",
+                    "api_key": "key",
+                    "extra_headers": ["not", "a", "dict"],
+                }
+            ]
+        },
+    )
+
+    result = rp._get_named_custom_provider("listheaders")
+
+    assert result is not None
+    # list-typed extra_headers should be rejected (not included in result)
+    assert "extra_headers" not in result
+
+
+def test_gateway_resolve_runtime_agent_kwargs_includes_extra_headers(monkeypatch):
+    """Gateway _resolve_runtime_agent_kwargs should pass through extra_headers."""
+    import gateway.run as gw
+
+    monkeypatch.setattr(
+        rp,
+        "resolve_runtime_provider",
+        lambda **kw: {
+            "api_key": "gw-key",
+            "base_url": "https://custom.host/v1",
+            "provider": "custom",
+            "api_mode": "chat_completions",
+            "extra_headers": {"CF-Access-Client-Id": "xxx.access"},
+        },
+    )
+    monkeypatch.delenv("HERMES_INFERENCE_PROVIDER", raising=False)
+
+    result = gw._resolve_runtime_agent_kwargs()
+
+    assert result["extra_headers"] == {"CF-Access-Client-Id": "xxx.access"}
+    assert result["api_key"] == "gw-key"
+
+
+def test_gateway_resolve_runtime_agent_kwargs_extra_headers_none(monkeypatch):
+    """Gateway _resolve_runtime_agent_kwargs should handle None extra_headers."""
+    import gateway.run as gw
+
+    monkeypatch.setattr(
+        rp,
+        "resolve_runtime_provider",
+        lambda **kw: {
+            "api_key": "gw-key",
+            "base_url": "https://custom.host/v1",
+            "provider": "custom",
+            "api_mode": "chat_completions",
+        },
+    )
+    monkeypatch.delenv("HERMES_INFERENCE_PROVIDER", raising=False)
+
+    result = gw._resolve_runtime_agent_kwargs()
+
+    assert result["extra_headers"] is None
