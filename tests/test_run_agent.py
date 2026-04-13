@@ -483,6 +483,131 @@ class TestInit:
             )
 
 
+class TestExtraHeaders:
+    """Tests for extra_headers support in AIAgent."""
+
+    def test_extra_headers_stored_on_agent(self):
+        """extra_headers parameter should be stored as instance attribute."""
+        headers = {"X-Custom-Auth": "token-123", "X-Client-Name": "test"}
+        with (
+            patch("run_agent.get_tool_definitions", return_value=[]),
+            patch("run_agent.check_toolset_requirements", return_value={}),
+            patch("run_agent.OpenAI"),
+        ):
+            a = AIAgent(
+                api_key="test-key-1234567890",
+                base_url="https://custom.host/v1",
+                provider="custom",
+                quiet_mode=True,
+                skip_context_files=True,
+                skip_memory=True,
+                extra_headers=headers,
+            )
+            assert a.extra_headers == headers
+
+    def test_extra_headers_passed_to_openai_client_for_custom_provider(self):
+        """extra_headers should be set as default_headers on the OpenAI client for custom providers."""
+        headers = {"X-Custom-Auth": "token-123"}
+        with (
+            patch("run_agent.get_tool_definitions", return_value=[]),
+            patch("run_agent.check_toolset_requirements", return_value={}),
+            patch("run_agent.OpenAI") as mock_openai,
+        ):
+            AIAgent(
+                api_key="test-key-1234567890",
+                base_url="https://custom.host/v1",
+                provider="custom",
+                quiet_mode=True,
+                skip_context_files=True,
+                skip_memory=True,
+                extra_headers=headers,
+            )
+            call_kwargs = mock_openai.call_args[1]
+            assert call_kwargs["default_headers"] == {"X-Custom-Auth": "token-123"}
+
+    def test_extra_headers_not_set_for_non_custom_provider(self):
+        """extra_headers should NOT be applied when provider is not 'custom'."""
+        headers = {"X-Custom-Auth": "token-123"}
+        with (
+            patch("run_agent.get_tool_definitions", return_value=[]),
+            patch("run_agent.check_toolset_requirements", return_value={}),
+            patch("run_agent.OpenAI") as mock_openai,
+        ):
+            AIAgent(
+                api_key="test-key-1234567890",
+                base_url="https://openrouter.ai/api/v1",
+                provider="openrouter",
+                quiet_mode=True,
+                skip_context_files=True,
+                skip_memory=True,
+                extra_headers=headers,
+            )
+            call_kwargs = mock_openai.call_args[1]
+            # OpenRouter headers should be set, not extra_headers
+            assert call_kwargs["default_headers"]["HTTP-Referer"] == "https://hermes-agent.nousresearch.com"
+            assert "X-Custom-Auth" not in call_kwargs["default_headers"]
+
+    def test_no_default_headers_when_no_extra_headers_and_custom_provider(self):
+        """Custom provider without extra_headers should not set default_headers."""
+        with (
+            patch("run_agent.get_tool_definitions", return_value=[]),
+            patch("run_agent.check_toolset_requirements", return_value={}),
+            patch("run_agent.OpenAI") as mock_openai,
+        ):
+            AIAgent(
+                api_key="test-key-1234567890",
+                base_url="https://custom.host/v1",
+                provider="custom",
+                quiet_mode=True,
+                skip_context_files=True,
+                skip_memory=True,
+            )
+            call_kwargs = mock_openai.call_args[1]
+            assert "default_headers" not in call_kwargs
+
+    def test_extra_headers_none_does_not_set_default_headers(self):
+        """Explicitly passing extra_headers=None should not set default_headers."""
+        with (
+            patch("run_agent.get_tool_definitions", return_value=[]),
+            patch("run_agent.check_toolset_requirements", return_value={}),
+            patch("run_agent.OpenAI") as mock_openai,
+        ):
+            AIAgent(
+                api_key="test-key-1234567890",
+                base_url="https://custom.host/v1",
+                provider="custom",
+                quiet_mode=True,
+                skip_context_files=True,
+                skip_memory=True,
+                extra_headers=None,
+            )
+            call_kwargs = mock_openai.call_args[1]
+            assert "default_headers" not in call_kwargs
+
+    def test_extra_headers_merged_with_existing_default_headers(self):
+        """extra_headers should merge with (not overwrite) existing default_headers."""
+        # This tests a provider whose base_url matches a known pattern (e.g. Kimi)
+        # AND also has custom extra_headers. The extra_headers should be merged.
+        headers = {"X-Custom-Auth": "token-123"}
+        with (
+            patch("run_agent.get_tool_definitions", return_value=[]),
+            patch("run_agent.check_toolset_requirements", return_value={}),
+            patch("run_agent.OpenAI") as mock_openai,
+        ):
+            # Use a custom provider with a base_url that doesn't match any known pattern
+            AIAgent(
+                api_key="test-key-1234567890",
+                base_url="https://my-inference.example.com/v1",
+                provider="custom",
+                quiet_mode=True,
+                skip_context_files=True,
+                skip_memory=True,
+                extra_headers=headers,
+            )
+            call_kwargs = mock_openai.call_args[1]
+            assert call_kwargs["default_headers"] == {"X-Custom-Auth": "token-123"}
+
+
 class TestInterrupt:
     def test_interrupt_sets_flag(self, agent):
         with patch("run_agent._set_interrupt"):

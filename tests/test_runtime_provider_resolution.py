@@ -657,3 +657,201 @@ def test_openrouter_provider_not_affected_by_custom_fix(monkeypatch):
 
     resolved = rp.resolve_runtime_provider(requested="openrouter")
     assert resolved["provider"] == "openrouter"
+
+
+# ------------------------------------------------------------------
+# extra_headers support for named custom providers
+# ------------------------------------------------------------------
+
+
+def test_named_custom_provider_with_extra_headers(monkeypatch):
+    """Custom providers with extra_headers should have them resolved."""
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.setattr(
+        rp,
+        "load_config",
+        lambda: {
+            "custom_providers": [
+                {
+                    "name": "CustomHost",
+                    "base_url": "https://custom.host.ai/v1",
+                    "api_key": "custom-host-key",
+                    "extra_headers": {
+                        "x-host-head": "test-host-value",
+                        "x-custom-auth": "auth-123",
+                    },
+                }
+            ]
+        },
+    )
+
+    resolved = rp.resolve_runtime_provider(requested="customhost")
+
+    assert resolved["provider"] == "custom"
+    assert resolved["extra_headers"] == {
+        "x-host-head": "test-host-value",
+        "x-custom-auth": "auth-123",
+    }
+    assert resolved["base_url"] == "https://custom.host.ai/v1"
+    assert resolved["api_key"] == "custom-host-key"
+
+
+def test_named_custom_provider_extra_headers_empty_dict_ignored(monkeypatch):
+    """Custom providers with empty extra_headers dict should not include the key."""
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.setattr(
+        rp,
+        "load_config",
+        lambda: {
+            "custom_providers": [
+                {
+                    "name": "EmptyHeaders",
+                    "base_url": "https://empty.host/v1",
+                    "api_key": "key",
+                    "extra_headers": {},
+                }
+            ]
+        },
+    )
+
+    resolved = rp.resolve_runtime_provider(requested="emptyheaders")
+
+    # empty dict results in extra_headers being None (key exists but value is None)
+    assert "extra_headers" in resolved
+    assert resolved["extra_headers"] is None
+
+
+def test_named_custom_provider_extra_headers_non_dict_ignored(monkeypatch):
+    """Custom providers with non-dict extra_headers should not include the key."""
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.setattr(
+        rp,
+        "load_config",
+        lambda: {
+            "custom_providers": [
+                {
+                    "name": "BadHeaders",
+                    "base_url": "https://bad.host/v1",
+                    "api_key": "key",
+                    "extra_headers": "not-a-dict",
+                }
+            ]
+        },
+    )
+
+    resolved = rp.resolve_runtime_provider(requested="badheaders")
+
+    # non-dict results in extra_headers being None (key exists but value is None)
+    assert "extra_headers" in resolved
+    assert resolved["extra_headers"] is None
+
+
+def test_resolve_named_custom_runtime_includes_extra_headers(monkeypatch):
+    """_resolve_named_custom_runtime should include extra_headers from the provider config."""
+    monkeypatch.setattr(
+        rp,
+        "_get_named_custom_provider",
+        lambda p: {
+            "name": "MyHost",
+            "base_url": "https://myhost.example/v1",
+            "api_key": "host-key",
+            "extra_headers": {"x-host-head": "myhost-123"},
+        },
+    )
+
+    resolved = rp._resolve_named_custom_runtime(requested_provider="myhost")
+
+    assert resolved is not None
+    assert resolved["extra_headers"] == {"x-host-head": "myhost-123"}
+    assert resolved["provider"] == "custom"
+
+
+def test_resolve_named_custom_runtime_without_extra_headers(monkeypatch):
+    """_resolve_named_custom_runtime includes extra_headers as None when not configured."""
+    monkeypatch.setattr(
+        rp,
+        "_get_named_custom_provider",
+        lambda p: {
+            "name": "PlainHost",
+            "base_url": "https://plain.host/v1",
+            "api_key": "plain-key",
+        },
+    )
+
+    resolved = rp._resolve_named_custom_runtime(requested_provider="plainhost")
+
+    assert resolved is not None
+    # extra_headers key is present but value is None when not configured
+    assert "extra_headers" in resolved
+    assert resolved["extra_headers"] is None
+
+
+def test_get_named_custom_provider_extra_headers_type_validated(monkeypatch):
+    """_get_named_custom_provider should only accept dict-type extra_headers."""
+    monkeypatch.setattr(
+        rp,
+        "load_config",
+        lambda: {
+            "custom_providers": [
+                {
+                    "name": "ListHeaders",
+                    "base_url": "https://list.host/v1",
+                    "api_key": "key",
+                    "extra_headers": ["not", "a", "dict"],
+                }
+            ]
+        },
+    )
+
+    result = rp._get_named_custom_provider("listheaders")
+
+    assert result is not None
+    # list-typed extra_headers should be rejected (not included in result)
+    assert "extra_headers" not in result
+
+
+def test_gateway_resolve_runtime_agent_kwargs_includes_extra_headers(monkeypatch):
+    """Gateway _resolve_runtime_agent_kwargs should pass through extra_headers."""
+    import gateway.run as gw
+
+    monkeypatch.setattr(
+        rp,
+        "resolve_runtime_provider",
+        lambda **kw: {
+            "api_key": "gw-key",
+            "base_url": "https://custom.host/v1",
+            "provider": "custom",
+            "api_mode": "chat_completions",
+            "extra_headers": {"CF-Access-Client-Id": "xxx.access"},
+        },
+    )
+    monkeypatch.delenv("HERMES_INFERENCE_PROVIDER", raising=False)
+
+    result = gw._resolve_runtime_agent_kwargs()
+
+    assert result["extra_headers"] == {"CF-Access-Client-Id": "xxx.access"}
+    assert result["api_key"] == "gw-key"
+
+
+def test_gateway_resolve_runtime_agent_kwargs_extra_headers_none(monkeypatch):
+    """Gateway _resolve_runtime_agent_kwargs should handle None extra_headers."""
+    import gateway.run as gw
+
+    monkeypatch.setattr(
+        rp,
+        "resolve_runtime_provider",
+        lambda **kw: {
+            "api_key": "gw-key",
+            "base_url": "https://custom.host/v1",
+            "provider": "custom",
+            "api_mode": "chat_completions",
+        },
+    )
+    monkeypatch.delenv("HERMES_INFERENCE_PROVIDER", raising=False)
+
+    result = gw._resolve_runtime_agent_kwargs()
+
+    assert result["extra_headers"] is None
